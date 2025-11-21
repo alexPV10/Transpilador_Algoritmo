@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proyecto 4</title>
+    <link rel="icon" type="image/png" href="globo.png">
+    <link rel="stylesheet" href="estilos.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Encabezado -->
+        <header class="app-header">
+            <div class="header-content">
+                <h1 class="app-title">
+                    <i class="fas fa-code"></i>
+                    Transpilador de Pseudocódigo
+                </h1>
+                <p class="app-subtitle">Transpilador de Algoritmos de Pseudocódigo a JavaScript (con HTML)</p>
+                <div class="app-features">
+                    <span class="feature">Análisis Léxico</span>
+                    <span class="feature">Análisis Sintáctico</span>
+                    <span class="feature">Generación de Código</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Contenido principal -->
+        <main class="app-main">
+            <div class="panels-container">
+                <!-- Panel del editor -->
+                <section class="panel editor-panel">
+                    <div class="panel-header">
+                        <h2><i class="fas fa-edit"></i> Editor de Pseudocódigo</h2>
+                        <p>Escribe algoritmos en pseudocódigo estructurado</p>
+                    </div>
+
+                    <div class="code-section">
+                        <div class="section-header">
+                            <label>Algoritmo:</label>
+                            <div class="editor-actions">
+                                <button class="btn btn-outline" onclick="limpiarEditor()">
+                                    <i class="fas fa-broom"></i> Limpiar
+                                </button>
+                                <button class="btn btn-outline" onclick="formatearCodigo()">
+                                    <i class="fas fa-align-left"></i> Formatear
+                                </button>
+                            </div>
+                        </div>
+                        <div class="editor-container">
+                            <div class="line-numbers" id="lineNumbers"></div>
+                            <textarea 
+                                id="pseudocodigo" 
+                                class="code-editor"
+                                placeholder="Ejemplo: ORDENAR([3, 1, 2])
+                                             Ejemplo: BUSCAR(5, [1, 5, 3])
+                                             Ejemplo: mi_lista = [5, 2, 8]
+                                                      ORDENAR(mi_lista)"
+                                spellcheck="false"
+                            ></textarea>
+                        </div>
+                        <div class="editor-hint">
+                            <i class="fas fa-keyboard"></i> Ctrl+Enter para ejecutar
+                        </div>
+                    </div>
+
+                    <div class="input-section">
+                        <label>Datos de entrada (opcional):</label>
+                        <input 
+                            type="text" 
+                            id="datosEntrada" 
+                            class="data-input"
+                            placeholder='Ejemplo: [3, 1, 2] o {"lista": [1,2,3]}'
+                        >
+                    </div>
+
+                    <button class="btn btn-primary execute-btn" onclick="procesarPseudocodigo()">
+                        <i class="fas fa-play"></i> Transpilar y Ejecutar
+                    </button>
+
+                    <div class="examples-section">
+                        <h3><i class="fas fa-lightbulb"></i> Ejemplos rápidos</h3>
+                        <div class="examples-grid">
+                            <button class="example-btn" onclick="cargarEjemplo('ordenar')">
+                                <i class="fas fa-sort-amount-down"></i> Ordenar
+                            </button>
+                            <button class="example-btn" onclick="cargarEjemplo('buscar')">
+                                <i class="fas fa-search"></i> Buscar
+                            </button>
+                            <button class="example-btn" onclick="cargarEjemplo('combinado')">
+                                <i class="fas fa-code-branch"></i> Combinado
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Panel de resultados -->
+                <section class="panel results-panel">
+                    <div class="panel-header">
+                        <h2><i class="fas fa-chart-bar"></i> Resultados y Análisis</h2>
+                        <p>Salida del transpilador y código generado</p>
+                    </div>
+
+                    <div class="tabs-container">
+                        <div class="tabs-header">
+                            <button class="tab-btn active" data-tab="resultado">
+                                <i class="fas fa-play-circle"></i> Resultado
+                            </button>
+                            <button class="tab-btn" data-tab="javascript">
+                                <i class="fab fa-js-square"></i> Código JS
+                            </button>
+                            <button class="tab-btn" data-tab="consola">
+                                <i class="fas fa-terminal"></i> Consola
+                            </button>
+                            <button class="tab-btn" data-tab="arbol">
+                                <i class="fas fa-project-diagram"></i> Árbol AST
+                            </button>
+                        </div>
+
+                        <div class="tab-content active" id="tab-resultado">
+                            <div class="tab-toolbar">
+                                <span>Salida del algoritmo</span>
+                                <button class="btn btn-outline" onclick="copiarResultado()">
+                                    <i class="fas fa-copy"></i> Copiar
+                                </button>
+                            </div>
+                            <div id="salidaResultado" class="output-content"></div>
+                        </div>
+
+                        <div class="tab-content" id="tab-javascript">
+                            <div class="tab-toolbar">
+                                <span>Código JavaScript generado</span>
+                                <button class="btn btn-outline" onclick="copiarJavaScript()">
+                                    <i class="fas fa-copy"></i> Copiar
+                                </button>
+                            </div>
+                            <div id="salidaJavascript" class="output-content code-output"></div>
+                        </div>
+
+                        <div class="tab-content" id="tab-consola">
+                            <div class="tab-toolbar">
+                                <span>Registro de ejecución</span>
+                                <button class="btn btn-outline" onclick="limpiarConsola()">
+                                    <i class="fas fa-broom"></i> Limpiar
+                                </button>
+                            </div>
+                            <div id="salidaConsola" class="output-content console-output"></div>
+                        </div>
+
+                        <div class="tab-content" id="tab-arbol">
+                            <div class="tab-toolbar">
+                                <span>Árbol de Sintaxis Abstracta (AST)</span>
+                                <button class="btn btn-outline" onclick="exportarArbol()">
+                                    <i class="fas fa-download"></i> Exportar
+                                </button>
+                            </div>
+                            <div id="salidaArbol" class="output-content ast-output"></div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <!-- Botones flotantes -->
+        <div class="floating-actions">
+            <button class="floating-btn help-btn" onclick="mostrarAyuda()">
+                <i class="fas fa-question"></i>
+            </button>
+            <button class="floating-btn config-btn" onclick="mostrarConfiguracion()">
+                <i class="fas fa-cog"></i>
+            </button>
+        </div>
+
+        <!-- Modales -->
+        <div id="modalAyuda" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3><i class="fas fa-graduation-cap"></i> Guía de Uso</h3>
+                    <button class="modal-close" onclick="cerrarAyuda()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="guide-section">
+                        <h4>Cómo usar el transpilador</h4>
+                        <div class="guide-steps">
+                            <div class="step">
+                                <div class="step-number">1</div>
+                                <div class="step-content">
+                                    <code>ORDENAR([3, 1, 2])</code>
+                                    <p>Ordena una lista de números de menor a mayor</p>
+                                </div>
+                            </div>
+                            <div class="step">
+                                <div class="step-number">2</div>
+                                <div class="step-content">
+                                    <code>BUSCAR(5, [1, 5, 3])</code>
+                                    <p>Busca un valor específico en una lista</p>
+                                </div>
+                            </div>
+                            <div class="step">
+                                <div class="step-number">3</div>
+                                <div class="step-content">
+                                    <code>mi_lista = [5, 2, 8]</code>
+                                    <p>Define variables y luego úsalas en funciones</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="features-section">
+                        <h4>Características del sistema</h4>
+                        <ul class="features-list">
+                            <li><i class="fas fa-check"></i> Análisis léxico y sintáctico completo</li>
+                            <li><i class="fas fa-check"></i> Generación de código JavaScript optimizado</li>
+                            <li><i class="fas fa-check"></i> Ejecución en tiempo real en el navegador</li>
+                            <li><i class="fas fa-check"></i> Visualización del árbol AST</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <p></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal de configuracion -->
+        <div id="modalConfig" class="modal">
+            <div class="modal-content config-modal">
+                <div class="modal-header">
+                    <h3><i class="fas fa-cog"></i> Configuración</h3>
+                    <button class="modal-close" onclick="cerrarConfiguracion()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="config-section">
+                        <label>
+                            <i class="fas fa-palette"></i>
+                            Tema de color:
+                        </label>
+                        <select id="temaSelect" onchange="cambiarTema(this.value)">
+                            <option value="light" selected>Claro</option>
+                            <option value="dark">Oscuro</option>
+                        </select>
+                    </div>
+                    
+                    <div class="config-section">
+                        <label>
+                            <i class="fas fa-font"></i>
+                            Tamaño de fuente:
+                        </label>
+                        <select id="fuenteSelect" onchange="cambiarTamanoFuente(this.value)">
+                            <option value="sm">Pequeño</option>
+                            <option value="md" selected>Mediano</option>
+                            <option value="lg">Grande</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
