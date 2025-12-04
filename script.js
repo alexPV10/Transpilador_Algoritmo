@@ -914,6 +914,47 @@ class GeneradorJavaScript {
         }
     }
 
+    /*
+    generarLlamadaFuncion(instruccion) {
+        const funcion = instruccion.funcion;
+        
+        if (funcion === 'ORDENAR') {
+            const lista = this.generarExpresion(instruccion.argumentos[0]);
+            const varOrdenada = this.generarVariableUnica('lista_ordenada');
+            
+            this.codigoGenerado += `  let ${varOrdenada} = ${lista}.slice();\n`;
+            this.codigoGenerado += `  ${varOrdenada}.sort((a, b) => a - b);\n`;
+            //this.codigoGenerado += `  agregarSalida('📊 Lista ordenada: ' + JSON.stringify(${varOrdenada}));\n`;
+            this.codigoGenerado += `  agregarSalida('📊 Lista ordenada: ' + JSON.stringify(${varOrdenada}) + '\\n');\n`;
+            this.codigoGenerado += `  logConsola('success', 'Ordenación completada');\n`;
+            
+            // Si la lista era una variable, actualizarla
+            if (instruccion.argumentos[0].tipo === 'VARIABLE') {
+                this.codigoGenerado += `  ${instruccion.argumentos[0].nombre} = ${varOrdenada};\n`;
+            }
+            
+        } else if (funcion === 'BUSCAR') {
+            const valor = this.generarExpresion(instruccion.argumentos[0]);
+            const lista = this.generarExpresion(instruccion.argumentos[1]);
+            const varIndice = this.generarVariableUnica('indice');
+            
+            this.codigoGenerado += `  let ${varIndice} = ${lista}.indexOf(${valor});\n`;
+            this.codigoGenerado += `  if (${varIndice} !== -1) {\n`;
+            this.codigoGenerado += `    agregarSalida('✅ Valor ${valor} encontrado en posición: ' + ${varIndice} + '\\n');\n`;
+            this.codigoGenerado += `    logConsola('success', 'Búsqueda exitosa: valor ${valor} en posición ${varIndice}');\n`;
+            this.codigoGenerado += `  } else {\n`;
+            this.codigoGenerado += `    agregarSalida('❌ Valor ${valor} no encontrado en la lista' + '\\n');\n`;
+            this.codigoGenerado += `    logConsola('warning', 'Valor ${valor} no encontrado');\n`;
+            this.codigoGenerado += `  }\n`;
+            
+        } else if (funcion === 'RESULTADO') {
+            const valor = this.generarExpresion(instruccion.argumentos[0]);
+            //this.codigoGenerado += `  agregarSalida('📝 Resultado: ' + JSON.stringify(${valor}));\n`;
+            this.codigoGenerado += `  agregarSalida('📝 Resultado: ' + JSON.stringify(${valor}) + '\\n');\n`;
+            this.codigoGenerado += `  logConsola('info', 'Resultado mostrado');\n`;
+        }
+    }
+    */
 
     generarLlamadaFuncion(instruccion) {
     const funcion = instruccion.funcion;
