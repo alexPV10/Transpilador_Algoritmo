@@ -1,14 +1,15 @@
-// Estado global
+// Estado global mejorado
 const estadoApp = {
     historialConsola: [],
-    variablesUsuario: {},
+    variablesUsuario: new Map(),
     configuracion: {
         tema: 'light',
-        tamanoFuente: 'md'
+        tamanoFuente: 'md',
+        autoEjecutar: true
     },
-    astActual: null
+    astActual: null,
+    contadorVariables: 0
 };
-
 
 // Sistema de Interfaz de Usuario
 // ============================================
@@ -16,16 +17,22 @@ const estadoApp = {
 function inicializarUI() {
     configurarEventListeners();
     actualizarNumerosLinea();
-    registrarConsola('Sistema de transpilación inicializado correctamente', 'success');
+    registrarConsola('🚀 Sistema de transpilación inicializado correctamente', 'success');
     
-    // Cargar configuracion guardada
+    // Cargar configuración guardada
     cargarConfiguracion();
+    
+    // Mostrar ayuda inicial
+    //setTimeout(() => mostrarAyuda(), 1000);
 }
 
 function configurarEventListeners() {
+    const editor = document.getElementById('pseudocodigo');
+    
     // Botones principales
-    document.getElementById('pseudocodigo').addEventListener('keydown', function(e) {
+    editor.addEventListener('keydown', function(e) {
         if (e.ctrlKey && e.key === 'Enter') {
+            e.preventDefault();
             procesarPseudocodigo();
         }
     });
@@ -38,27 +45,25 @@ function configurarEventListeners() {
         });
     });
 
-    // Numeros de linea en tiempo real
-    document.getElementById('pseudocodigo').addEventListener('input', actualizarNumerosLinea);
-    document.getElementById('pseudocodigo').addEventListener('scroll', sincronizarScroll);
+    // Números de línea en tiempo real
+    editor.addEventListener('input', actualizarNumerosLinea);
+    editor.addEventListener('scroll', sincronizarScroll);
 
-    // Cerrar modales al hacer clic fuera
+    // Cerrar modales
     document.addEventListener('click', function(e) {
         if (e.target.classList.contains('modal')) {
             e.target.classList.remove('active');
         }
     });
 
-    // Cerrar modales con ESC
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
-            cerrarAyuda();
-            cerrarConfiguracion();
+            cerrarTodosModales();
         }
     });
 
     // Cargar ejemplo por defecto
-    setTimeout(() => cargarEjemplo('ordenar'), 500);
+    setTimeout(() => cargarEjemplo('ordenar'), 300);
 }
 
 function actualizarNumerosLinea() {
@@ -67,8 +72,11 @@ function actualizarNumerosLinea() {
     const lineas = editor.value.split('\n').length;
     
     let numerosHTML = '';
-    for (let i = 1; i <= Math.max(lineas, 15); i++) {
-        numerosHTML += `<div>${i}</div>`;
+    const lineasVisibles = Math.max(lineas, 20);
+    
+    for (let i = 1; i <= lineasVisibles; i++) {
+        const clase = i <= lineas ? 'linea-activa' : 'linea-inactiva';
+        numerosHTML += `<div class="${clase}">${i}</div>`;
     }
     
     lineNumbers.innerHTML = numerosHTML;
@@ -80,7 +88,7 @@ function sincronizarScroll() {
     lineNumbers.scrollTop = editor.scrollTop;
 }
 
-// Funciones Principales de Transpilacion
+// Funciones Principales de Transpilación
 // ============================================
 
 function procesarPseudocodigo() {
@@ -88,45 +96,64 @@ function procesarPseudocodigo() {
     const datosEntrada = document.getElementById('datosEntrada').value.trim();
     
     limpiarResultados();
+    estadoApp.variablesUsuario.clear();
+    estadoApp.contadorVariables = 0;
     
     if (!pseudocodigo) {
-        mostrarError('Por favor, escribe algún pseudocódigo para transpilar');
+        mostrarError('❌ Por favor, escribe algún pseudocódigo para transpilar');
         return;
     }
 
     try {
-        mostrarEstadoCarga('Analizando pseudocódigo...');
+        mostrarEstadoCarga('🔍 Analizando pseudocódigo...');
         
+        // Procesar datos de entrada si existen
         if (datosEntrada) {
             procesarDatosEntrada(datosEntrada);
         }
 
+        // Transpilar y ejecutar
         const resultado = transpilar(pseudocodigo);
-        mostrarResultado(resultado);
-        mostrarPestana('resultado');
+        
+        if (estadoApp.configuracion.autoEjecutar) {
+            mostrarResultado(resultado);
+            mostrarPestana('resultado');
+        }
         
     } catch (error) {
-        mostrarError('Error durante la transpilación: ' + error.message);
-        registrarConsola('Error: ' + error.message, 'error');
+        mostrarError(`❌ Error durante la transpilación: ${error.message}`);
+        registrarConsola(`Error detallado: ${error.stack}`, 'error');
     }
 }
 
 function mostrarEstadoCarga(mensaje) {
     document.getElementById('salidaResultado').innerHTML = 
-        `<div class="loading">${mensaje}</div>`;
+        `<div class="loading">
+            <i class="fas fa-spinner fa-spin"></i> ${mensaje}
+         </div>`;
 }
 
 function limpiarResultados() {
     document.getElementById('salidaResultado').innerHTML = '';
     document.getElementById('salidaJavascript').innerHTML = '';
-    document.getElementById('salidaConsola').innerHTML = '';
     document.getElementById('salidaArbol').innerHTML = '';
 }
 
 function mostrarResultado(resultado) {
-    // Reemplazar \n con saltos de linea reales
-    const resultadoFormateado = resultado.replace(/\\n/g, '\n');
-    document.getElementById('salidaResultado').textContent = resultadoFormateado;
+    const resultadoDiv = document.getElementById('salidaResultado');
+    resultadoDiv.innerHTML = '';
+    
+    if (typeof resultado === 'string') {
+        const lineas = resultado.split('\n');
+        lineas.forEach(linea => {
+            const div = document.createElement('div');
+            div.className = 'result-line';
+            div.textContent = linea;
+            resultadoDiv.appendChild(div);
+        });
+    } else {
+        resultadoDiv.textContent = JSON.stringify(resultado, null, 2);
+    }
 }
 
 function mostrarError(mensaje) {
@@ -144,59 +171,98 @@ function mostrarPestana(nombrePestana) {
     });
     
     // Mostrar contenido seleccionado
-    document.getElementById(`tab-${nombrePestana}`).classList.add('active');
+    const tabContent = document.getElementById(`tab-${nombrePestana}`);
+    if (tabContent) {
+        tabContent.classList.add('active');
+    }
     
     // Actualizar estado visual de los botones
     document.querySelectorAll('.tab-btn').forEach(boton => {
         boton.classList.remove('active');
     });
     
-    // Activar boton seleccionado
-    document.querySelector(`[data-tab="${nombrePestana}"]`).classList.add('active');
+    // Activar botón seleccionado
+    const tabBtn = document.querySelector(`[data-tab="${nombrePestana}"]`);
+    if (tabBtn) {
+        tabBtn.classList.add('active');
+    }
 }
 
 // Sistema de Consola y Logging
 // ============================================
 
 function registrarConsola(mensaje, tipo = 'info') {
-    const timestamp = new Date().toLocaleTimeString();
+    const timestamp = new Date().toLocaleTimeString('es-ES', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        second: '2-digit'
+    });
     
     estadoApp.historialConsola.push({timestamp, mensaje, tipo});
     
-    const consolaHtml = estadoApp.historialConsola.map(entry => 
-        `<div class="console-line console-${entry.tipo}">[${entry.timestamp}] ${entry.mensaje}</div>`
-    ).join('');
+    const consolaDiv = document.getElementById('salidaConsola');
+    if (!consolaDiv) return;
     
-    document.getElementById('salidaConsola').innerHTML = consolaHtml;
+    const iconos = {
+        'info': 'fa-info-circle',
+        'success': 'fa-check-circle',
+        'error': 'fa-times-circle',
+        'warning': 'fa-exclamation-triangle'
+    };
     
-
-    const consolaOutput = document.getElementById('salidaConsola');
-    consolaOutput.scrollTop = consolaOutput.scrollHeight;
+    const nuevaLinea = document.createElement('div');
+    nuevaLinea.className = `console-line console-${tipo}`;
+    nuevaLinea.innerHTML = `
+        <i class="fas ${iconos[tipo] || 'fa-info-circle'}"></i>
+        <span class="console-time">[${timestamp}]</span>
+        <span class="console-message">${mensaje}</span>
+    `;
+    
+    consolaDiv.appendChild(nuevaLinea);
+    consolaDiv.scrollTop = consolaDiv.scrollHeight;
 }
 
 function limpiarConsola() {
     estadoApp.historialConsola = [];
-    document.getElementById('salidaConsola').innerHTML = '';
-    registrarConsola('Consola limpiada', 'info');
+    const consolaDiv = document.getElementById('salidaConsola');
+    if (consolaDiv) {
+        consolaDiv.innerHTML = '';
+    }
+    registrarConsola('🧹 Consola limpiada', 'info');
 }
 
 function procesarDatosEntrada(datos) {
     try {
-        if (datos.startsWith('{') || datos.startsWith('[')) {
-            const datosParseados = JSON.parse(datos);
-            if (typeof datosParseados === 'object') {
-                estadoApp.variablesUsuario = { ...estadoApp.variablesUsuario, ...datosParseados };
-                registrarConsola('Datos de entrada procesados correctamente', 'success');
+        if (!datos.trim()) return;
+        
+        let datosParseados;
+        
+        // Intentar parsear como JSON
+        if ((datos.startsWith('{') && datos.endsWith('}')) || 
+            (datos.startsWith('[') && datos.endsWith(']'))) {
+            datosParseados = JSON.parse(datos);
+        } else {
+            // Intentar evaluar como expresión JavaScript segura
+            datosParseados = eval(`(${datos})`);
+        }
+        
+        if (typeof datosParseados === 'object') {
+            if (Array.isArray(datosParseados)) {
+                estadoApp.variablesUsuario.set('listaEntrada', datosParseados);
+                registrarConsola(`📦 Lista de entrada asignada: ${JSON.stringify(datosParseados)}`, 'success');
+            } else {
+                Object.entries(datosParseados).forEach(([key, value]) => {
+                    estadoApp.variablesUsuario.set(key, value);
+                });
+                registrarConsola(`📥 Datos de entrada procesados: ${Object.keys(datosParseados).join(', ')}`, 'success');
             }
         } else {
-            const lista = eval(datos);
-            if (Array.isArray(lista)) {
-                estadoApp.variablesUsuario.lista = lista;
-                registrarConsola(`Lista asignada: ${JSON.stringify(lista)}`, 'success');
-            }
+            estadoApp.variablesUsuario.set('entrada', datosParseados);
+            registrarConsola(`📝 Valor de entrada asignado: ${datosParseados}`, 'success');
         }
+        
     } catch (error) {
-        registrarConsola(`No se pudieron procesar los datos: ${error.message}`, 'error');
+        registrarConsola(`⚠️ No se pudieron procesar los datos: ${error.message}`, 'warning');
     }
 }
 
@@ -205,74 +271,142 @@ function procesarDatosEntrada(datos) {
 
 function cargarEjemplo(tipo) {
     const ejemplos = {
-        ordenar: 'ORDENAR([3, 1, 2, 8, 5, 4])',
-        buscar: 'BUSCAR(5, [1, 9, 5, 3, 7, 2])',
-        combinado: 'mi_lista = [5, 2, 8, 1, 9, 3]\nORDENAR(mi_lista)\nBUSCAR(8, mi_lista)'
+        ordenar: `// Ejemplo: Ordenar una lista
+notas = [4.2, 6.8, 5.5, 7.2, 3.8, 8.0]
+ORDENAR(notas)
+RESULTADO(notas)`,
+        
+        buscar: `// Ejemplo: Buscar un valor en una lista
+ventas = [15000, 22000, 18000, 25000]
+valor_buscado = 18000
+BUSCAR(valor_buscado, ventas)`,
+        
+        combinado: `// Ejemplo: Combinado
+memoria = [512, 768, 256, 1024, 384, 896]
+ORDENAR(memoria)
+BUSCAR(1024, memoria)
+BUSCAR(256, memoria)`,
+        
+        aprobados: `// Ejemplo: Búsqueda de aprobados
+notas_finales = [4.2, 6.8, 5.5, 7.2, 3.8, 8.0]
+ORDENAR(notas_finales)
+BUSCAR(6.0, notas_finales)`
     };
     
-    document.getElementById('pseudocodigo').value = ejemplos[tipo];
-    document.getElementById('datosEntrada').value = '';
-    actualizarNumerosLinea();
-    
-    registrarConsola(`Ejemplo "${tipo}" cargado`, 'success');
+    if (ejemplos[tipo]) {
+        document.getElementById('pseudocodigo').value = ejemplos[tipo];
+        document.getElementById('datosEntrada').value = '';
+        actualizarNumerosLinea();
+        registrarConsola(`📚 Ejemplo "${tipo}" cargado`, 'success');
+    }
 }
 
 function limpiarEditor() {
     document.getElementById('pseudocodigo').value = '';
     document.getElementById('datosEntrada').value = '';
     actualizarNumerosLinea();
-    registrarConsola('Editor limpiado', 'info');
+    estadoApp.variablesUsuario.clear();
+    registrarConsola('🧹 Editor limpiado', 'info');
 }
 
 function formatearCodigo() {
     const editor = document.getElementById('pseudocodigo');
     let codigo = editor.value;
     
-    // Formateo basico: asegurar espacios alrededor de operadores
+    // Eliminar líneas vacías al inicio/final
+    codigo = codigo.trim();
+    
+    // Normalizar saltos de línea
+    codigo = codigo.replace(/\r\n/g, '\n');
+    
+    // Agregar espacios alrededor de operadores
     codigo = codigo.replace(/\s*=\s*/g, ' = ');
     codigo = codigo.replace(/\s*,\s*/g, ', ');
-    codigo = codigo.replace(/\s*\(\s*/g, '(');
-    codigo = codigo.replace(/\s*\)\s*/g, ')');
     
-    editor.value = codigo;
-    registrarConsola('Código formateado', 'success');
+    // Espacios después de coma en listas
+    codigo = codigo.replace(/\[(\s*)/g, '[');
+    codigo = codigo.replace(/(\s*)\]/g, ']');
+    
+    // Eliminar múltiples espacios
+    codigo = codigo.replace(/\s+/g, ' ');
+    
+    // Mantener saltos de línea originales
+    const lineas = codigo.split('\n');
+    const lineasFormateadas = lineas.map(linea => {
+        if (linea.trim() === '') return '';
+        return linea.trim();
+    });
+    
+    editor.value = lineasFormateadas.join('\n');
+    actualizarNumerosLinea();
+    registrarConsola('✨ Código formateado', 'success');
 }
 
 function copiarResultado() {
     const texto = document.getElementById('salidaResultado').textContent;
-    navigator.clipboard.writeText(texto).then(() => {
-        registrarConsola('Resultado copiado al portapapeles', 'success');
-    });
+    copiarAlPortapapeles(texto, 'Resultado');
 }
 
 function copiarJavaScript() {
     const texto = document.getElementById('salidaJavascript').textContent;
+    copiarAlPortapapeles(texto, 'Código JavaScript');
+}
+
+function copiarAlPortapapeles(texto, descripcion) {
     navigator.clipboard.writeText(texto).then(() => {
-        registrarConsola('Código JavaScript copiado al portapapeles', 'success');
+        mostrarNotificacion(`📋 ${descripcion} copiado al portapapeles`);
+        registrarConsola(`${descripcion} copiado`, 'success');
+    }).catch(err => {
+        registrarConsola(`Error al copiar: ${err.message}`, 'error');
     });
 }
 
-// Sistema de Configuracioon
+// Sistema de Configuración
 // ============================================
 
 function cargarConfiguracion() {
-    const configGuardada = localStorage.getItem('transpiladorConfig');
-    if (configGuardada) {
-        const config = JSON.parse(configGuardada);
-        estadoApp.configuracion = config;
-        
-        // Aplicar configuracion
-        cambiarTema(config.tema);
-        cambiarTamanoFuente(config.tamanoFuente);
-        
-        // Actualizar selects
-        document.getElementById('temaSelect').value = config.tema;
-        document.getElementById('fuenteSelect').value = config.tamanoFuente;
+    try {
+        const configGuardada = localStorage.getItem('transpiladorConfig');
+        if (configGuardada) {
+            const config = JSON.parse(configGuardada);
+            estadoApp.configuracion = { ...estadoApp.configuracion, ...config };
+            
+            // Aplicar configuración
+            aplicarConfiguracion();
+        }
+    } catch (error) {
+        console.warn('Error cargando configuración:', error);
     }
 }
 
 function guardarConfiguracion() {
     localStorage.setItem('transpiladorConfig', JSON.stringify(estadoApp.configuracion));
+}
+
+function aplicarConfiguracion() {
+    // Tema
+    if (estadoApp.configuracion.tema === 'dark') {
+        document.body.classList.add('dark-mode');
+    } else {
+        document.body.classList.remove('dark-mode');
+    }
+    
+    // Tamaño de fuente
+    const sizes = {
+        'sm': '14px',
+        'md': '16px', 
+        'lg': '18px'
+    };
+    
+    document.documentElement.style.fontSize = 
+        sizes[estadoApp.configuracion.tamanoFuente] || '16px';
+    
+    // Actualizar selects
+    const temaSelect = document.getElementById('temaSelect');
+    const fuenteSelect = document.getElementById('fuenteSelect');
+    
+    if (temaSelect) temaSelect.value = estadoApp.configuracion.tema;
+    if (fuenteSelect) fuenteSelect.value = estadoApp.configuracion.tamanoFuente;
 }
 
 function mostrarConfiguracion() {
@@ -281,33 +415,19 @@ function mostrarConfiguracion() {
 
 function cerrarConfiguracion() {
     document.getElementById('modalConfig').classList.remove('active');
+    guardarConfiguracion();
 }
 
 function cambiarTema(tema) {
     estadoApp.configuracion.tema = tema;
-    
-    if (tema === 'dark') {
-        document.body.classList.add('dark-mode');
-    } else {
-        document.body.classList.remove('dark-mode');
-    }
-    
-    guardarConfiguracion();
-    registrarConsola(`Tema cambiado a: ${tema}`, 'success');
+    aplicarConfiguracion();
+    registrarConsola(`🎨 Tema cambiado a: ${tema}`, 'success');
 }
 
 function cambiarTamanoFuente(tamano) {
     estadoApp.configuracion.tamanoFuente = tamano;
-    
-    const sizes = {
-        'sm': '14px',
-        'md': '16px', 
-        'lg': '18px'
-    };
-    
-    document.documentElement.style.fontSize = sizes[tamano];
-    guardarConfiguracion();
-    registrarConsola(`Tamaño de fuente cambiado a: ${tamano}`, 'success');
+    aplicarConfiguracion();
+    registrarConsola(`🔠 Tamaño de fuente cambiado a: ${tamano}`, 'success');
 }
 
 // Sistema de Modal
@@ -321,19 +441,47 @@ function cerrarAyuda() {
     document.getElementById('modalAyuda').classList.remove('active');
 }
 
-// Nucleo del Transpilador
+function cerrarTodosModales() {
+    document.querySelectorAll('.modal').forEach(modal => {
+        modal.classList.remove('active');
+    });
+}
+
+function mostrarNotificacion(mensaje, duracion = 3000) {
+    // Crear notificación temporal
+    const notificacion = document.createElement('div');
+    notificacion.className = 'notificacion';
+    notificacion.innerHTML = `
+        <i class="fas fa-check-circle"></i>
+        <span>${mensaje}</span>
+    `;
+    
+    document.body.appendChild(notificacion);
+    
+    // Mostrar con animación
+    setTimeout(() => notificacion.classList.add('mostrar'), 10);
+    
+    // Ocultar y eliminar
+    setTimeout(() => {
+        notificacion.classList.remove('mostrar');
+        setTimeout(() => notificacion.remove(), 300);
+    }, duracion);
+}
+
+// Núcleo del Transpilador - MEJORADO
 // ============================================
 
 class AnalizadorLexico {
     constructor() {
-        this.palabrasClave = ['ORDENAR', 'BUSCAR'];
+        this.palabrasClave = ['ORDENAR', 'BUSCAR', 'RESULTADO'];
         this.tokenEspecial = {
             '=': 'ASIGNACION',
             '(': 'PARENTESIS_IZQ',
             ')': 'PARENTESIS_DER',
             '[': 'CORCHETE_IZQ',
             ']': 'CORCHETE_DER',
-            ',': 'COMA'
+            ',': 'COMA',
+            '.': 'PUNTO'
         };
     }
 
@@ -341,28 +489,49 @@ class AnalizadorLexico {
         let tokens = [];
         let posicion = 0;
         let numeroLinea = 1;
+        let columna = 1;
 
         while (posicion < entrada.length) {
             let caracter = entrada[posicion];
 
+            // Saltar espacios
             if (this.esEspacio(caracter)) {
-                if (caracter === '\n') numeroLinea++;
+                if (caracter === '\n') {
+                    numeroLinea++;
+                    columna = 1;
+                } else if (caracter === '\t') {
+                    columna += 4;
+                } else {
+                    columna++;
+                }
                 posicion++;
                 continue;
             }
 
+            // Saltar comentarios
             if (caracter === '/' && entrada[posicion + 1] === '/') {
                 while (posicion < entrada.length && entrada[posicion] !== '\n') {
                     posicion++;
+                    columna++;
                 }
+                continue;
+            }
+
+            // Detectar números (enteros y decimales)
+            if (this.esDigito(caracter) || (caracter === '.' && this.esDigito(entrada[posicion + 1]))) {
+                const tokenNumero = this.analizarNumero(entrada, posicion, numeroLinea, columna);
+                tokens.push(tokenNumero.token);
+                posicion = tokenNumero.nuevaPosicion;
+                columna += tokenNumero.longitud;
                 continue;
             }
 
             // Detectar listas
             if (caracter === '[') {
-                const tokenLista = this.analizarLista(entrada, posicion, numeroLinea);
+                const tokenLista = this.analizarLista(entrada, posicion, numeroLinea, columna);
                 tokens.push(tokenLista.token);
                 posicion = tokenLista.nuevaPosicion;
+                columna += tokenLista.longitud;
                 continue;
             }
 
@@ -371,120 +540,151 @@ class AnalizadorLexico {
                 tokens.push({
                     tipo: this.tokenEspecial[caracter],
                     valor: caracter,
-                    linea: numeroLinea
+                    linea: numeroLinea,
+                    columna: columna
                 });
                 posicion++;
-                continue;
-            }
-
-            // Numeros
-            if (this.esDigito(caracter)) {
-                const tokenNumero = this.analizarNumero(entrada, posicion, numeroLinea);
-                tokens.push(tokenNumero.token);
-                posicion = tokenNumero.nuevaPosicion;
+                columna++;
                 continue;
             }
 
             // Identificadores y palabras clave
-            if (this.esLetra(caracter)) {
-                const tokenIdentificador = this.analizarIdentificador(entrada, posicion, numeroLinea);
+            if (this.esLetra(caracter) || caracter === '_') {
+                const tokenIdentificador = this.analizarIdentificador(entrada, posicion, numeroLinea, columna);
                 tokens.push(tokenIdentificador.token);
                 posicion = tokenIdentificador.nuevaPosicion;
+                columna += tokenIdentificador.longitud;
                 continue;
             }
 
-            throw new Error(`Carácter no reconocido: "${caracter}" en línea ${numeroLinea}`);
+            throw new Error(`Carácter no reconocido: "${caracter}" en línea ${numeroLinea}, columna ${columna}`);
         }
+
+        // Agregar token de fin de archivo
+        tokens.push({
+            tipo: 'EOF',
+            valor: '',
+            linea: numeroLinea,
+            columna: columna
+        });
 
         return tokens;
     }
 
-    analizarLista(entrada, posicion, numeroLinea) {
-        let inicio = posicion;
-        let profundidad = 0;
-        
+    analizarNumero(entrada, posicion, numeroLinea, columna) {
+        let numero = '';
+        let tienePunto = false;
+        let longitud = 0;
+
         while (posicion < entrada.length) {
             const caracter = entrada[posicion];
             
-            if (caracter === '[') profundidad++;
-            if (caracter === ']') profundidad--;
-            
-            posicion++;
-            if (profundidad === 0) break;
+            if (this.esDigito(caracter)) {
+                numero += caracter;
+                posicion++;
+                longitud++;
+            } else if (caracter === '.' && !tienePunto && this.esDigito(entrada[posicion + 1])) {
+                numero += caracter;
+                posicion++;
+                longitud++;
+                tienePunto = true;
+            } else {
+                break;
+            }
         }
+
+        const valor = tienePunto ? parseFloat(numero) : parseInt(numero);
         
-        const textoLista = entrada.substring(inicio, posicion);
+        return {
+            token: {
+                tipo: 'NUMERO',
+                valor: valor,
+                texto: numero,
+                linea: numeroLinea,
+                columna: columna
+            },
+            nuevaPosicion: posicion,
+            longitud: longitud
+        };
+    }
+
+    analizarLista(entrada, posicion, numeroLinea, columna) {
+        let textoLista = '';
+        let longitud = 0;
+        let profundidad = 0;
+        let inicioPos = posicion;
+
+        while (posicion < entrada.length) {
+            const caracter = entrada[posicion];
+            textoLista += caracter;
+            longitud++;
+            posicion++;
+
+            if (caracter === '[') profundidad++;
+            if (caracter === ']') {
+                profundidad--;
+                if (profundidad === 0) break;
+            }
+        }
+
+        if (profundidad !== 0) {
+            throw new Error(`Lista mal cerrada en línea ${numeroLinea}`);
+        }
+
         try {
-            const lista = JSON.parse(textoLista);
+            // Intentar parsear como array de JavaScript
+            const lista = eval(textoLista);
+            if (!Array.isArray(lista)) {
+                throw new Error('No es una lista válida');
+            }
+
             return {
                 token: {
                     tipo: 'LISTA',
                     valor: lista,
+                    texto: textoLista,
                     linea: numeroLinea,
-                    textoOriginal: textoLista
+                    columna: columna
                 },
-                nuevaPosicion: posicion
+                nuevaPosicion: posicion,
+                longitud: longitud
             };
         } catch (error) {
-            try {
-                const lista = eval(textoLista);
-                if (Array.isArray(lista)) {
-                    return {
-                        token: {
-                            tipo: 'LISTA',
-                            valor: lista,
-                            linea: numeroLinea,
-                            textoOriginal: textoLista
-                        },
-                        nuevaPosicion: posicion
-                    };
-                }
-                throw new Error('No es una lista válida');
-            } catch (e) {
-                throw new Error(`Lista mal formada en línea ${numeroLinea}: ${textoLista}`);
-            }
+            throw new Error(`Lista inválida en línea ${numeroLinea}: ${error.message}`);
         }
     }
 
-    analizarNumero(entrada, posicion, numeroLinea) {
-        let numero = '';
-        while (posicion < entrada.length && this.esDigito(entrada[posicion])) {
-            numero += entrada[posicion];
+    analizarIdentificador(entrada, posicion, numeroLinea, columna) {
+        let identificador = '';
+        let longitud = 0;
+
+        while (posicion < entrada.length) {
+            const caracter = entrada[posicion];
+            if (!this.esCaracterIdentificador(caracter)) break;
+            
+            identificador += caracter;
             posicion++;
+            longitud++;
         }
+
+        const esPalabraClave = this.palabrasClave.includes(identificador);
+        
         return {
             token: {
-                tipo: 'NUMERO',
-                valor: parseInt(numero),
-                linea: numeroLinea
+                tipo: esPalabraClave ? 'PALABRA_CLAVE' : 'IDENTIFICADOR',
+                valor: identificador,
+                texto: identificador,
+                linea: numeroLinea,
+                columna: columna
             },
-            nuevaPosicion: posicion
+            nuevaPosicion: posicion,
+            longitud: longitud
         };
-    }
-
-    analizarIdentificador(entrada, posicion, numeroLinea) {
-        let identificador = '';
-        while (posicion < entrada.length && this.esCaracterIdentificador(entrada[posicion])) {
-            identificador += entrada[posicion];
-            posicion++;
-        }
-
-        const token = this.palabrasClave.includes(identificador) ? {
-            tipo: 'PALABRA_CLAVE',
-            valor: identificador,
-            linea: numeroLinea
-        } : {
-            tipo: 'IDENTIFICADOR',
-            valor: identificador,
-            linea: numeroLinea
-        };
-
-        return { token, nuevaPosicion: posicion };
     }
 
     esEspacio(caracter) { return /\s/.test(caracter); }
     esDigito(caracter) { return /[0-9]/.test(caracter); }
-    esLetra(caracter) { return /[a-zA-Z_]/.test(caracter); }
+    esLetra(caracter) { return /[a-zA-ZáéíóúÁÉÍÓÚñÑ]/.test(caracter); }
     esCaracterIdentificador(caracter) { return /[a-zA-Z0-9_]/.test(caracter); }
 }
 
@@ -496,18 +696,27 @@ class AnalizadorSintactico {
     }
 
     analizar() {
-        while (this.posicion < this.tokens.length) {
+        this.arbolSintactico = [];
+        
+        while (this.posicion < this.tokens.length - 1) { // -1 para excluir EOF
             const instruccion = this.analizarInstruccion();
             if (instruccion) {
                 this.arbolSintactico.push(instruccion);
             }
         }
+        
         return this.arbolSintactico;
     }
 
     analizarInstruccion() {
         const token = this.tokenActual();
-        if (!token) return null;
+        if (!token || token.tipo === 'EOF') return null;
+
+        // Saltar comentarios
+        if (token.tipo === 'COMENTARIO') {
+            this.avanzar();
+            return this.analizarInstruccion();
+        }
 
         if (token.tipo === 'PALABRA_CLAVE') {
             return this.analizarFuncion();
@@ -515,9 +724,14 @@ class AnalizadorSintactico {
             const siguiente = this.tokenSiguiente();
             if (siguiente && siguiente.tipo === 'ASIGNACION') {
                 return this.analizarAsignacion();
+            } else {
+                // Podría ser una expresión simple
+                this.avanzar();
+                return null;
             }
         }
 
+        // Si no es ninguna instrucción reconocida, avanzar
         this.avanzar();
         return null;
     }
@@ -527,6 +741,7 @@ class AnalizadorSintactico {
         this.expectar('PARENTESIS_IZQ');
 
         let argumentos = [];
+        
         if (tokenFuncion.valor === 'ORDENAR') {
             const lista = this.analizarExpresion();
             argumentos.push(lista);
@@ -535,6 +750,9 @@ class AnalizadorSintactico {
             this.expectar('COMA');
             const lista = this.analizarExpresion();
             argumentos.push(valor, lista);
+        } else if (tokenFuncion.valor === 'RESULTADO') {
+            const valor = this.analizarExpresion();
+            argumentos.push(valor);
         }
 
         this.expectar('PARENTESIS_DER');
@@ -543,20 +761,22 @@ class AnalizadorSintactico {
             tipo: 'LLAMADA_FUNCION',
             funcion: tokenFuncion.valor,
             argumentos: argumentos,
-            linea: tokenFuncion.linea
+            linea: tokenFuncion.linea,
+            columna: tokenFuncion.columna
         };
     }
 
     analizarAsignacion() {
         const identificador = this.avanzar();
-        this.avanzar(); // Consumir '='
+        this.expectar('ASIGNACION');
         const expresion = this.analizarExpresion();
 
         return {
             tipo: 'ASIGNACION',
             identificador: identificador.valor,
             valor: expresion,
-            linea: identificador.linea
+            linea: identificador.linea,
+            columna: identificador.columna
         };
     }
 
@@ -566,14 +786,25 @@ class AnalizadorSintactico {
 
         if (token.tipo === 'IDENTIFICADOR') {
             this.avanzar();
-            return { tipo: 'VARIABLE', nombre: token.valor };
+            return { 
+                tipo: 'VARIABLE', 
+                nombre: token.valor,
+                linea: token.linea 
+            };
         } else if (token.tipo === 'NUMERO') {
             this.avanzar();
-            return { tipo: 'NUMERO', valor: token.valor };
+            return { 
+                tipo: 'NUMERO', 
+                valor: token.valor,
+                linea: token.linea 
+            };
         } else if (token.tipo === 'LISTA') {
-            const listaValor = token.valor;
             this.avanzar();
-            return { tipo: 'LISTA', elementos: listaValor };
+            return { 
+                tipo: 'LISTA', 
+                elementos: token.valor,
+                linea: token.linea 
+            };
         }
 
         throw new Error(`Expresión no válida en línea ${token.linea}`);
@@ -597,7 +828,8 @@ class AnalizadorSintactico {
     expectar(tipoEsperado) {
         const token = this.avanzar();
         if (!token || token.tipo !== tipoEsperado) {
-            throw new Error(`Se esperaba ${tipoEsperado} en línea ${token ? token.linea : 'desconocida'}`);
+            const tokenActual = token ? token.valor : 'EOF';
+            throw new Error(`Se esperaba ${tipoEsperado} pero se encontró "${tokenActual}" en línea ${token ? token.linea : 'desconocida'}`);
         }
         return token;
     }
@@ -607,30 +839,57 @@ class GeneradorJavaScript {
     constructor(arbolSintactico) {
         this.arbol = arbolSintactico;
         this.codigoGenerado = '';
-        this.variables = new Map();
+        this.variablesDeclaradas = new Set();
+        this.contador = 0;
     }
 
     generar() {
         this.codigoGenerado = '';
+        this.variablesDeclaradas.clear();
         
-        this.codigoGenerado += "// Código generado automáticamente\n";
-        this.codigoGenerado += "function ejecutarTranspilacion() {\n";
-        this.codigoGenerado += "  let resultado = '';\n\n";
+        this.codigoGenerado += "// CÓDIGO GENERADO POR EL TRANSPILADOR\n";
+        this.codigoGenerado += "(function() {\n";
+        this.codigoGenerado += "  'use strict';\n\n";
+        
+        this.codigoGenerado += "  // Variables de salida\n";
+        this.codigoGenerado += "  let resultado = [];\n";
+        this.codigoGenerado += "  let consola = [];\n\n";
+        
+        this.codigoGenerado += "  // Funciones auxiliares\n";
+        this.codigoGenerado += "  function agregarSalida(texto) {\n";
+        this.codigoGenerado += "    resultado.push(texto);\n";
+        this.codigoGenerado += "    console.log(texto);\n";
+        this.codigoGenerado += "  }\n\n";
+        
+        this.codigoGenerado += "  function logConsola(tipo, mensaje) {\n";
+        this.codigoGenerado += "    consola.push({tipo, mensaje, tiempo: new Date().toLocaleTimeString()});\n";
+        this.codigoGenerado += "  }\n\n";
 
-        for (const instruccion of this.arbol) {
-            if (instruccion) {
-                this.generarInstruccion(instruccion);
-            }
-        }
+        // Generar código para cada instrucción
+        this.arbol.forEach((instruccion, index) => {
+            this.generarInstruccion(instruccion, index);
+        });
 
-        this.codigoGenerado += "  return resultado;\n";
-        this.codigoGenerado += "}\n\n";
-        this.codigoGenerado += "ejecutarTranspilacion();";
+        this.codigoGenerado += "\n  // Retornar resultados\n";
+        this.codigoGenerado += "  return {\n";
+        //this.codigoGenerado += "    salida: resultado.join('\\\\n'),\n";
+        this.codigoGenerado += "    salida: resultado,\n";
+        this.codigoGenerado += "    consola: consola\n";
+        this.codigoGenerado += "  };\n\n";
+        
+        this.codigoGenerado += "})();";
 
         return this.codigoGenerado;
     }
 
-    generarInstruccion(instruccion) {
+    generarVariableUnica(base) {
+        this.contador++;
+        return `${base}_${this.contador}_${Date.now().toString(36)}`;
+    }
+
+    generarInstruccion(instruccion, index) {
+        this.codigoGenerado += `\n  // Instrucción ${index + 1}\n`;
+        
         switch (instruccion.tipo) {
             case 'ASIGNACION':
                 this.generarAsignacion(instruccion);
@@ -645,28 +904,95 @@ class GeneradorJavaScript {
         const nombreVar = instruccion.identificador;
         const valor = this.generarExpresion(instruccion.valor);
         
-        this.codigoGenerado += `  let ${nombreVar} = ${valor};\n`;
-        this.variables.set(nombreVar, true);
+        if (!this.variablesDeclaradas.has(nombreVar)) {
+            this.codigoGenerado += `  let ${nombreVar} = ${valor};\n`;
+            this.variablesDeclaradas.add(nombreVar);
+            this.codigoGenerado += `  logConsola('info', 'Variable "${nombreVar}" asignada: ' + JSON.stringify(${nombreVar}));\n`;
+        } else {
+            this.codigoGenerado += `  ${nombreVar} = ${valor};\n`;
+            this.codigoGenerado += `  logConsola('info', 'Variable "${nombreVar}" actualizada: ' + JSON.stringify(${nombreVar}));\n`;
+        }
     }
 
+    /*
     generarLlamadaFuncion(instruccion) {
         const funcion = instruccion.funcion;
         
         if (funcion === 'ORDENAR') {
             const lista = this.generarExpresion(instruccion.argumentos[0]);
-            this.codigoGenerado += `  let lista_ordenada = ${lista}.slice().sort((a, b) => a - b);\n`;
-            this.codigoGenerado += `  resultado += 'Lista ordenada: ' + JSON.stringify(lista_ordenada) + '\\\\n';\n`;
+            const varOrdenada = this.generarVariableUnica('lista_ordenada');
+            
+            this.codigoGenerado += `  let ${varOrdenada} = ${lista}.slice();\n`;
+            this.codigoGenerado += `  ${varOrdenada}.sort((a, b) => a - b);\n`;
+            //this.codigoGenerado += `  agregarSalida('📊 Lista ordenada: ' + JSON.stringify(${varOrdenada}));\n`;
+            this.codigoGenerado += `  agregarSalida('📊 Lista ordenada: ' + JSON.stringify(${varOrdenada}) + '\\n');\n`;
+            this.codigoGenerado += `  logConsola('success', 'Ordenación completada');\n`;
+            
+            // Si la lista era una variable, actualizarla
+            if (instruccion.argumentos[0].tipo === 'VARIABLE') {
+                this.codigoGenerado += `  ${instruccion.argumentos[0].nombre} = ${varOrdenada};\n`;
+            }
+            
         } else if (funcion === 'BUSCAR') {
             const valor = this.generarExpresion(instruccion.argumentos[0]);
             const lista = this.generarExpresion(instruccion.argumentos[1]);
-            this.codigoGenerado += `  let indice = ${lista}.indexOf(${valor});\n`;
-            this.codigoGenerado += `  if (indice !== -1) {\n`;
-            this.codigoGenerado += `    resultado += 'Valor ${valor} encontrado en posición: ' + indice + '\\\\n';\n`;
+            const varIndice = this.generarVariableUnica('indice');
+            
+            this.codigoGenerado += `  let ${varIndice} = ${lista}.indexOf(${valor});\n`;
+            this.codigoGenerado += `  if (${varIndice} !== -1) {\n`;
+            this.codigoGenerado += `    agregarSalida('✅ Valor ${valor} encontrado en posición: ' + ${varIndice} + '\\n');\n`;
+            this.codigoGenerado += `    logConsola('success', 'Búsqueda exitosa: valor ${valor} en posición ${varIndice}');\n`;
             this.codigoGenerado += `  } else {\n`;
-            this.codigoGenerado += `    resultado += 'Valor ${valor} no encontrado en la lista\\\\n';\n`;
+            this.codigoGenerado += `    agregarSalida('❌ Valor ${valor} no encontrado en la lista' + '\\n');\n`;
+            this.codigoGenerado += `    logConsola('warning', 'Valor ${valor} no encontrado');\n`;
             this.codigoGenerado += `  }\n`;
+            
+        } else if (funcion === 'RESULTADO') {
+            const valor = this.generarExpresion(instruccion.argumentos[0]);
+            //this.codigoGenerado += `  agregarSalida('📝 Resultado: ' + JSON.stringify(${valor}));\n`;
+            this.codigoGenerado += `  agregarSalida('📝 Resultado: ' + JSON.stringify(${valor}) + '\\n');\n`;
+            this.codigoGenerado += `  logConsola('info', 'Resultado mostrado');\n`;
         }
     }
+    */
+
+    generarLlamadaFuncion(instruccion) {
+    const funcion = instruccion.funcion;
+    
+    if (funcion === 'ORDENAR') {
+        const lista = this.generarExpresion(instruccion.argumentos[0]);
+        const varOrdenada = this.generarVariableUnica('lista_ordenada');
+        
+        this.codigoGenerado += `  let ${varOrdenada} = ${lista}.slice();\n`;
+        this.codigoGenerado += `  ${varOrdenada}.sort((a, b) => a - b);\n`;
+        this.codigoGenerado += `  agregarSalida('📊 Lista ordenada: ' + JSON.stringify(${varOrdenada}));\n`;
+        this.codigoGenerado += `  logConsola('success', 'Ordenación completada');\n`;
+        
+        // Si la lista era una variable, actualizarla
+        if (instruccion.argumentos[0].tipo === 'VARIABLE') {
+            this.codigoGenerado += `  ${instruccion.argumentos[0].nombre} = ${varOrdenada};\n`;
+        }
+        
+    } else if (funcion === 'BUSCAR') {
+        const valor = this.generarExpresion(instruccion.argumentos[0]);
+        const lista = this.generarExpresion(instruccion.argumentos[1]);
+        const varIndice = this.generarVariableUnica('indice');
+        
+        this.codigoGenerado += `  let ${varIndice} = ${lista}.indexOf(${valor});\n`;
+        this.codigoGenerado += `  if (${varIndice} !== -1) {\n`;
+        this.codigoGenerado += `    agregarSalida('✅ Valor ${valor} encontrado en posición: ' + ${varIndice});\n`;
+        this.codigoGenerado += `    logConsola('success', 'Búsqueda exitosa: valor ${valor} en posición ${varIndice}');\n`;
+        this.codigoGenerado += `  } else {\n`;
+        this.codigoGenerado += `    agregarSalida('❌ Valor ${valor} no encontrado en la lista');\n`;
+        this.codigoGenerado += `    logConsola('warning', 'Valor ${valor} no encontrado');\n`;
+        this.codigoGenerado += `  }\n`;
+        
+    } else if (funcion === 'RESULTADO') {
+        const valor = this.generarExpresion(instruccion.argumentos[0]);
+        this.codigoGenerado += `  agregarSalida('📝 Resultado: ' + JSON.stringify(${valor}));\n`;
+        this.codigoGenerado += `  logConsola('info', 'Resultado mostrado');\n`;
+    }
+}
 
     generarExpresion(expresion) {
         switch (expresion.tipo) {
@@ -683,61 +1009,99 @@ class GeneradorJavaScript {
 }
 
 function transpilar(codigoFuente) {
-    registrarConsola('Iniciando proceso de transpilación...', 'info');
+    registrarConsola('🔍 Iniciando proceso de transpilación...', 'info');
 
     // Fase 1: Análisis Léxico
     const analizadorLexico = new AnalizadorLexico();
     const tokens = analizadorLexico.analizar(codigoFuente);
-    registrarConsola(`Análisis léxico completado: ${tokens.length} tokens encontrados`, 'success');
+    registrarConsola(`📊 Análisis léxico completado: ${tokens.length} tokens encontrados`, 'success');
+
+    // Mostrar tokens en consola (opcional)
+    if (tokens.length <= 20) {
+        tokens.forEach((token, i) => {
+            if (token.tipo !== 'EOF') {
+                registrarConsola(`Token ${i}: ${token.tipo} = "${token.valor}"`, 'info');
+            }
+        });
+    }
 
     // Fase 2: Análisis Sintáctico
     const analizadorSintactico = new AnalizadorSintactico(tokens);
     const arbolSintactico = analizadorSintactico.analizar();
     estadoApp.astActual = arbolSintactico;
-    registrarConsola(`Análisis sintáctico completado: ${arbolSintactico.length} instrucciones parseadas`, 'success');
+    registrarConsola(`🌳 Análisis sintáctico completado: ${arbolSintactico.length} instrucciones parseadas`, 'success');
 
     // Visualizar AST
     visualizarArbolAST(arbolSintactico);
 
-    // Fase 3: Generacin de Coodigo
+    // Fase 3: Generación de Código
     const generador = new GeneradorJavaScript(arbolSintactico);
     const codigoJS = generador.generar();
     
+    // Mostrar código generado
     document.getElementById('salidaJavascript').textContent = codigoJS;
-    registrarConsola('Generación de código JavaScript completada', 'success');
+    registrarConsola('⚡ Generación de código JavaScript completada', 'success');
 
-    // Fase 4: Ejecucin
+    // Fase 4: Ejecución
     try {
         let codigoEjecucion = '';
-        for (const [key, value] of Object.entries(estadoApp.variablesUsuario)) {
-            codigoEjecucion += `let ${key} = ${JSON.stringify(value)};\n`;
+        
+        // Inyectar variables del usuario
+        if (estadoApp.variablesUsuario.size > 0) {
+            codigoEjecucion += "// Variables del usuario\n";
+            estadoApp.variablesUsuario.forEach((valor, clave) => {
+                codigoEjecucion += `let ${clave} = ${JSON.stringify(valor)};\n`;
+                registrarConsola(`Inyectada variable: ${clave} = ${JSON.stringify(valor)}`, 'info');
+            });
+            codigoEjecucion += "\n";
         }
+        
         codigoEjecucion += codigoJS;
-
+        
+        // Ejecutar
         const resultadoEjecucion = eval(codigoEjecucion);
-        registrarConsola('Ejecución completada correctamente', 'success');
-
-        return resultadoEjecucion;
+        registrarConsola('✅ Ejecución completada correctamente', 'success');
+        
+        // Procesar logs de la consola interna
+        if (resultadoEjecucion.consola) {
+            resultadoEjecucion.consola.forEach(log => {
+                registrarConsola(log.mensaje, log.tipo);
+            });
+        }
+        
+        //return resultadoEjecucion.salida || 'Ejecución completada sin salida';
+        if (Array.isArray(resultadoEjecucion.salida)) {
+                return resultadoEjecucion.salida.join('\n');
+            }
+        
+        return resultadoEjecucion.salida || 'Ejecución completada sin salida';
 
     } catch (error) {
-        registrarConsola(`Error durante la ejecución: ${error.message}`, 'error');
-        throw error;
+        const mensajeError = `❌ Error durante la ejecución: ${error.message}`;
+        registrarConsola(mensajeError, 'error');
+        console.error('Error detallado:', error);
+        throw new Error(mensajeError);
     }
 }
 
 function visualizarArbolAST(arbol) {
     let astHTML = '<div class="ast-tree">';
     
-    arbol.forEach((nodo, index) => {
-        astHTML += visualizarNodoAST(nodo, index);
-    });
+    if (arbol.length === 0) {
+        astHTML += '<div class="ast-empty">No hay instrucciones para mostrar</div>';
+    } else {
+        arbol.forEach((nodo, index) => {
+            astHTML += visualizarNodoAST(nodo, 0, index);
+        });
+    }
     
     astHTML += '</div>';
     document.getElementById('salidaArbol').innerHTML = astHTML;
 }
 
-function visualizarNodoAST(nodo, nivel = 0) {
-    let html = `<div class="ast-node" style="margin-left: ${nivel * 20}px">`;
+function visualizarNodoAST(nodo, nivel = 0, index = 0) {
+    const indentacion = nivel * 25;
+    let html = `<div class="ast-node" style="margin-left: ${indentacion}px">`;
     
     html += `<div class="ast-header">`;
     html += `<span class="ast-type">${nodo.tipo}</span>`;
@@ -752,14 +1116,18 @@ function visualizarNodoAST(nodo, nivel = 0) {
     
     html += `</div>`;
     
-    if (nodo.argumentos) {
-        nodo.argumentos.forEach(arg => {
-            html += visualizarNodoAST(arg, nivel + 1);
+    if (nodo.argumentos && nodo.argumentos.length > 0) {
+        html += `<div class="ast-args">`;
+        nodo.argumentos.forEach((arg, i) => {
+            html += visualizarNodoAST(arg, nivel + 1, i);
         });
+        html += `</div>`;
     }
     
     if (nodo.valor) {
+        html += `<div class="ast-value">`;
         html += visualizarNodoAST(nodo.valor, nivel + 1);
+        html += `</div>`;
     }
     
     html += `</div>`;
@@ -767,18 +1135,73 @@ function visualizarNodoAST(nodo, nivel = 0) {
 }
 
 function exportarArbol() {
+    if (!estadoApp.astActual || estadoApp.astActual.length === 0) {
+        mostrarNotificacion('❌ No hay árbol AST para exportar');
+        return;
+    }
+    
     const astData = JSON.stringify(estadoApp.astActual, null, 2);
     const blob = new Blob([astData], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'arbol_ast.json';
+    a.download = `arbol_ast_${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    registrarConsola('Árbol AST exportado como JSON', 'success');
+    
+    mostrarNotificacion('🌳 Árbol AST exportado como JSON');
+    registrarConsola('Árbol AST exportado', 'success');
 }
 
-// Inicializacion
+// Estilos adicionales para notificaciones
+const estilosNotificacion = document.createElement('style');
+estilosNotificacion.textContent = `
+.notificacion {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: var(--primary);
+    color: white;
+    padding: 12px 20px;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transform: translateX(150%);
+    transition: transform 0.3s ease;
+    z-index: 9999;
+    max-width: 350px;
+}
+
+.notificacion.mostrar {
+    transform: translateX(0);
+}
+
+.notificacion i {
+    font-size: 1.2rem;
+}
+
+.linea-activa {
+    color: var(--text-secondary);
+}
+
+.linea-inactiva {
+    color: var(--border);
+}
+
+.result-line {
+    margin: 4px 0;
+    padding: 2px 0;
+    border-bottom: 1px solid var(--border-light);
+}
+`;
+
+document.head.appendChild(estilosNotificacion);
+
+// Inicialización
 // ============================================
 
 document.addEventListener('DOMContentLoaded', function() {
